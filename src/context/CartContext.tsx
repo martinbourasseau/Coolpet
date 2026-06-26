@@ -8,6 +8,7 @@ export interface CartItem {
   image: string;
   quantity: number;
   slug: string;
+  stripePriceId: string;
 }
 
 interface CartState {
@@ -46,6 +47,7 @@ function cartReducer(state: CartState, action: CartAction): CartState {
             image: action.payload.images[0],
             quantity: 1,
             slug: action.payload.slug,
+            stripePriceId: action.payload.stripePriceId,
           },
         ],
       };

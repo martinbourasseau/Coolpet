@@ -7,7 +7,7 @@
  * - Templates HTML professionnels
  */
 
-import { Order } from './orders';
+import { Order } from './orders.js';
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 🔧 CONFIGURATION

@@ -10,7 +10,7 @@
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { stripe, validateCartItems, ALLOWED_COUNTRIES, CartItem } from './_lib/stripe';
+import { stripe, validateCartItems, ALLOWED_COUNTRIES, CartItem } from './_lib/stripe.js';
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 🔧 CONFIGURATION

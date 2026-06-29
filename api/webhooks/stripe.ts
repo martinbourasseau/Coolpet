@@ -14,10 +14,10 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { buffer } from 'micro';
 import Stripe from 'stripe';
-import { stripe } from '../_lib/stripe';
-import { saveOrder, updateOrderStatus, getOrderByPaymentIntent, OrderItem, ShippingAddress } from '../_lib/orders';
-import { createCJOrder, CJShippingAddress } from '../_lib/cj-dropshipping';
-import { sendOrderConfirmationEmail } from '../_lib/email';
+import { stripe } from '../_lib/stripe.js';
+import { saveOrder, updateOrderStatus, getOrderByPaymentIntent, OrderItem, ShippingAddress } from '../_lib/orders.js';
+import { createCJOrder, CJShippingAddress } from '../_lib/cj-dropshipping.js';
+import { sendOrderConfirmationEmail } from '../_lib/email.js';
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 🔧 CONFIGURATION VERCEL

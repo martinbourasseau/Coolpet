@@ -9,7 +9,7 @@
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { getOrderByStripeSession } from '../_lib/orders';
+import { getOrderByStripeSession } from '../_lib/orders.js';
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 🔧 CONFIGURATION

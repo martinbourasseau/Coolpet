@@ -10,8 +10,8 @@
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { getOrderById, updateOrderStatus, OrderStatus } from '../_lib/orders';
-import { sendShippingEmail } from '../_lib/email';
+import { getOrderById, updateOrderStatus, OrderStatus } from '../_lib/orders.js';
+import { sendShippingEmail } from '../_lib/email.js';
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 📦 TYPES

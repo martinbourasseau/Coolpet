@@ -9,6 +9,8 @@ export interface CartItem {
   quantity: number;
   slug: string;
   stripePriceId: string;
+  cjProductId: string;
+  cjVariantId: string;
 }
 
 interface CartState {
@@ -48,6 +50,8 @@ function cartReducer(state: CartState, action: CartAction): CartState {
             quantity: 1,
             slug: action.payload.slug,
             stripePriceId: action.payload.stripePriceId,
+            cjProductId: action.payload.cjProductId,
+            cjVariantId: action.payload.cjVariantId,
           },
         ],
       };
@@ -102,10 +106,29 @@ export function CartProvider({ children }: { children: ReactNode }) {
       const saved = localStorage.getItem("coolpet-cart");
       if (saved) {
         const parsed = JSON.parse(saved) as CartItem[];
-        dispatch({ type: "LOAD_CART", payload: parsed });
+
+        // ✅ Filtrer les items invalides (sans stripePriceId ou cjProductId)
+        const validItems = parsed.filter(
+          (item) =>
+            item &&
+            item.id &&
+            item.stripePriceId &&
+            item.cjProductId &&
+            item.cjVariantId &&
+            typeof item.price === "number" &&
+            typeof item.quantity === "number"
+        );
+
+        if (validItems.length !== parsed.length) {
+          console.warn(
+            `🧹 ${parsed.length - validItems.length} article(s) invalide(s) supprimé(s) du panier`
+          );
+        }
+
+        dispatch({ type: "LOAD_CART", payload: validItems });
       }
     } catch {
-      // ignore parse errors
+      localStorage.removeItem("coolpet-cart");
     }
   }, []);
 

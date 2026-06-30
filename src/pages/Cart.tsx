@@ -27,6 +27,9 @@ export default function CartPage({ onNavigate }: CartPageProps) {
             quantity: item.quantity || 1,
             name: item.name || "",
             price: item.price || 0,
+            id: item.id,                               // ✅ AJOUTÉ
+            cjProductId: item.cjProductId,             // ✅ AJOUTÉ
+            cjVariantId: item.cjVariantId,             // ✅ AJOUTÉ
           })),
         }),
       });

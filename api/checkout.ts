@@ -1,170 +1,114 @@
 /**
  * 💳 CoolPet - Création de Session Stripe Checkout
- * 
- * Endpoint : POST /api/create-checkout-session
- * 
- * Ce fichier gère :
- * - La validation du panier
- * - La création de la session Stripe Checkout
- * - La configuration des options de livraison
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { stripe, validateCartItems, ALLOWED_COUNTRIES, CartItem } from './_lib/stripe.js';
+import Stripe from 'stripe';
 
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// 🔧 CONFIGURATION
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+  apiVersion: '2024-06-20',
+  typescript: true,
+});
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://coolpet.vercel.app';
 
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// 🚀 HANDLER PRINCIPAL
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+interface CheckoutItem {
+  priceId: string;
+  quantity: number;
+  name?: string;
+  price?: number;
+}
 
 export default async function handler(
   req: VercelRequest,
   res: VercelResponse
 ): Promise<void> {
-  // ─────────────────────────────────────────
-  // CORS Headers
-  // ─────────────────────────────────────────
-  res.setHeader('Access-Control-Allow-Origin', FRONTEND_URL);
+  res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  // Preflight request
   if (req.method === 'OPTIONS') {
     res.status(200).end();
     return;
   }
 
-  // Vérification méthode
   if (req.method !== 'POST') {
-    console.log('❌ Méthode non autorisée:', req.method);
     res.status(405).json({ error: 'Méthode non autorisée' });
     return;
   }
 
-  console.log('💳 Création de session Stripe Checkout...');
-
   try {
-    // ─────────────────────────────────────────
-    // Extraction des données
-    // ─────────────────────────────────────────
     const { items, customerEmail } = req.body as {
-      items: CartItem[];
+      items: CheckoutItem[];
       customerEmail?: string;
     };
 
     console.log('📦 Articles reçus:', items?.length || 0);
-    if (customerEmail) {
-      console.log('📧 Email client:', customerEmail);
-    }
 
-    // ─────────────────────────────────────────
-    // Validation du panier
-    // ─────────────────────────────────────────
-    const validation = validateCartItems(items);
-    if (!validation.valid) {
-      console.log('❌ Validation panier échouée:', validation.error);
-      res.status(400).json({ error: validation.error });
+    // Validation
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      res.status(400).json({ error: 'Panier vide' });
       return;
     }
 
-    // ─────────────────────────────────────────
-    // Construction des line items Stripe
-    // ─────────────────────────────────────────
+    for (let i = 0; i < items.length; i++) {
+      if (!items[i].priceId) {
+        res.status(400).json({ error: `Article ${i + 1} : identifiant Stripe manquant` });
+        return;
+      }
+      if (!items[i].quantity || items[i].quantity < 1) {
+        res.status(400).json({ error: `Article ${i + 1} : quantité invalide` });
+        return;
+      }
+    }
+
+    // Construction des line items avec les Price IDs Stripe
     const lineItems = items.map((item) => ({
-      price_data: {
-        currency: 'eur',
-        unit_amount: Math.round(item.price * 100), // Stripe utilise les centimes
-        product_data: {
-          name: item.name,
-          images: item.image ? [item.image] : [],
-          metadata: {
-            cjProductId: item.cjProductId,
-            cjVariantId: item.cjVariantId,
-          },
-        },
-      },
+      price: item.priceId,
       quantity: item.quantity,
     }));
 
-    // ─────────────────────────────────────────
-    // Sérialisation des items pour metadata
-    // ─────────────────────────────────────────
-    const metadataItems = items.map((item) => ({
-      cjProductId: item.cjProductId,
-      cjVariantId: item.cjVariantId,
-      quantity: item.quantity,
-      name: item.name,
-    }));
-
-    // ─────────────────────────────────────────
     // Création de la session Stripe
-    // ─────────────────────────────────────────
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       mode: 'payment',
       locale: 'fr',
       line_items: lineItems,
-      
-      // Collecte de l'adresse de livraison
       shipping_address_collection: {
-        allowed_countries: ALLOWED_COUNTRIES,
+        allowed_countries: ['FR', 'BE', 'CH', 'LU', 'MC', 'CA'],
       },
-      
-      // Options de livraison
       shipping_options: [
         {
           shipping_rate_data: {
             type: 'fixed_amount',
             fixed_amount: {
-              amount: 0, // Livraison gratuite
+              amount: 0,
               currency: 'eur',
             },
             display_name: 'Livraison standard gratuite',
             delivery_estimate: {
-              minimum: {
-                unit: 'business_day',
-                value: 7,
-              },
-              maximum: {
-                unit: 'business_day',
-                value: 15,
-              },
+              minimum: { unit: 'business_day', value: 7 },
+              maximum: { unit: 'business_day', value: 15 },
             },
           },
         },
       ],
-      
-      // URLs de redirection
       success_url: `${FRONTEND_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${FRONTEND_URL}/cart`,
-      
-      // Email client pré-rempli si fourni
+      cancel_url: `${FRONTEND_URL}/#cart`,
       ...(customerEmail && { customer_email: customerEmail }),
-      
-      // Metadata pour le webhook
-      metadata: {
-        items: JSON.stringify(metadataItems),
-      },
     });
 
     console.log('✅ Session Stripe créée:', session.id);
-    console.log('🔗 URL Checkout:', session.url);
 
     res.status(200).json({
       sessionId: session.id,
       url: session.url,
     });
-  } catch (error) {
-    console.error('❌ Erreur lors de la création de la session:', error);
-    
-    // Ne pas exposer les détails d'erreur
+  } catch (error: any) {
+    console.error('❌ Erreur Stripe:', error.message || error);
     res.status(500).json({
-      error: 'Une erreur est survenue lors de la création de la session de paiement',
+      error: 'Erreur lors de la création de la session de paiement',
+      details: error.message,
     });
   }
 }

@@ -1,5 +1,6 @@
 /**
  * 💳 CoolPet - Création de Session Stripe Checkout
+ * Version avec metadata pour transmettre les IDs CJ au webhook
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
@@ -17,6 +18,9 @@ interface CheckoutItem {
   quantity: number;
   name?: string;
   price?: number;
+  id?: string;
+  cjProductId?: string;
+  cjVariantId?: string;
 }
 
 export default async function handler(
@@ -68,6 +72,30 @@ export default async function handler(
       quantity: item.quantity,
     }));
 
+    // 🆕 Préparation des metadata pour le webhook
+    const itemsMetadata = items.map((item) => ({
+      id: item.id || '',
+      name: item.name || '',
+      price: item.price || 0,
+      quantity: item.quantity,
+      cjProductId: item.cjProductId || '',
+      cjVariantId: item.cjVariantId || '',
+    }));
+
+    // ⚠️ Stripe limite metadata à 500 caractères par valeur
+    // On vérifie la taille du JSON et on tronque si besoin
+    let itemsJson = JSON.stringify(itemsMetadata);
+    if (itemsJson.length > 490) {
+      console.warn('⚠️ Metadata items trop longs, version minimale');
+      // Version minimale (juste les IDs essentiels pour CJ)
+      const minimalItems = items.map((item) => ({
+        cjProductId: item.cjProductId || '',
+        cjVariantId: item.cjVariantId || '',
+        quantity: item.quantity,
+      }));
+      itemsJson = JSON.stringify(minimalItems);
+    }
+
     // Création de la session Stripe
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
@@ -93,12 +121,23 @@ export default async function handler(
           },
         },
       ],
+      // 🆕 MÉTADONNÉES pour le webhook (essentiel pour CJ Dropshipping)
+      metadata: {
+        items: itemsJson,
+        source: 'coolpet-store',
+        itemCount: items.length.toString(),
+      },
+      // ⚠️ Collecter aussi le téléphone (CJ en a besoin)
+      phone_number_collection: {
+        enabled: true,
+      },
       success_url: `${FRONTEND_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${FRONTEND_URL}/#cart`,
       ...(customerEmail && { customer_email: customerEmail }),
     });
 
     console.log('✅ Session Stripe créée:', session.id);
+    console.log('📦 Items dans metadata:', itemsMetadata.length);
 
     res.status(200).json({
       sessionId: session.id,

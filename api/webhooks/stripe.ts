@@ -1,7 +1,5 @@
 /**
- * 🔔 CoolPet - Webhook Stripe
- * 
- * Endpoint : POST /api/webhooks/stripe
+ * 🔔 CoolPet - Webhook Stripe avec gestion des bundles
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
@@ -18,6 +16,30 @@ const stripeSecretKey = process.env.STRIPE_SECRET_KEY!;
 const stripe = new Stripe(stripeSecretKey, {
   apiVersion: '2024-06-20',
 });
+
+// 🆕 Mapping des bundles → produits réels CJ
+const BUNDLE_MAPPING: Record<string, Array<{ cjProductId: string; cjVariantId: string; quantity: number; name: string }>> = {
+  'PACK_BUNDLE_ETE_3': [
+    {
+      cjProductId: 'FEA700D2-3974-4878-8F44-327B9943457C',
+      cjVariantId: 'CJJJCWGY00567-L-blue',
+      quantity: 1,
+      name: 'Bandana Rafraîchissant (du Pack)',
+    },
+    {
+      cjProductId: '52DDA3BB-FC36-4224-9469-1625BE7C5271',
+      cjVariantId: 'CJJJCWGY01290-Blue',
+      quantity: 1,
+      name: 'Gourde Portable (du Pack)',
+    },
+    {
+      cjProductId: '1665981331156774912',
+      cjVariantId: 'CJMY177238301AZ',
+      quantity: 1,
+      name: 'Tapis de Léchage (du Pack)',
+    },
+  ],
+};
 
 interface OrderItem {
   id: string;
@@ -104,17 +126,45 @@ interface CJProduct {
   quantity: number;
 }
 
+/**
+ * 🆕 Éclate les bundles en produits individuels
+ */
+function expandBundles(items: OrderItem[]): CJProduct[] {
+  const expanded: CJProduct[] = [];
+
+  for (const item of items) {
+    // Si c'est un bundle connu, on l'éclate
+    if (item.cjProductId && BUNDLE_MAPPING[item.cjProductId]) {
+      const bundleItems = BUNDLE_MAPPING[item.cjProductId];
+      for (const bundleItem of bundleItems) {
+        expanded.push({
+          vid: bundleItem.cjVariantId,
+          quantity: bundleItem.quantity * item.quantity,
+        });
+        console.log(`📦 Bundle éclaté: ${bundleItem.name} x${bundleItem.quantity * item.quantity}`);
+      }
+    } else if (item.cjVariantId && !item.cjVariantId.startsWith('PLACEHOLDER_') && !item.cjVariantId.startsWith('PACK_')) {
+      // Produit normal
+      expanded.push({
+        vid: item.cjVariantId,
+        quantity: item.quantity,
+      });
+    }
+  }
+
+  return expanded;
+}
+
 async function createCJOrder(params: {
   orderId: string;
   shippingAddress: CJShippingAddress;
-  products: CJProduct[];
+  items: OrderItem[];
 }): Promise<{ cjOrderId: string; simulated: boolean }> {
-  const realProducts = params.products.filter(
-    (p) => p.vid && !p.vid.startsWith('PLACEHOLDER_')
-  );
+  // Éclater les bundles avant d'envoyer à CJ
+  const cjProducts = expandBundles(params.items);
 
-  if (realProducts.length === 0) {
-    console.log('🧪 [DEV] Placeholders détectés → simulation CJ');
+  if (cjProducts.length === 0) {
+    console.log('🧪 [DEV] Aucun produit CJ réel → simulation');
     return {
       cjOrderId: `DEV-${params.orderId}-${Date.now()}`,
       simulated: true,
@@ -133,6 +183,7 @@ async function createCJOrder(params: {
   }
 
   try {
+    // Auth CJ
     const authResponse = await fetch('https://developers.cjdropshipping.com/api2.0/v1/authentication/getAccessToken', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -142,6 +193,7 @@ async function createCJOrder(params: {
     if (!authData.result) throw new Error(`Auth CJ: ${authData.message}`);
     const token = authData.data.accessToken;
 
+    // Création commande
     const orderPayload = {
       orderNumber: `COOLPET-${params.orderId}`,
       shippingZip: params.shippingAddress.zip,
@@ -155,8 +207,10 @@ async function createCJOrder(params: {
       remark: `CoolPet #${params.orderId}`,
       fromCountryCode: 'CN',
       logisticName: 'CJPacket Ordinary',
-      products: realProducts,
+      products: cjProducts,
     };
+
+    console.log('📦 Envoi commande CJ:', JSON.stringify(orderPayload, null, 2));
 
     const response = await fetch('https://developers.cjdropshipping.com/api2.0/v1/shopping/order/createOrder', {
       method: 'POST',
@@ -168,6 +222,8 @@ async function createCJOrder(params: {
     });
 
     const data = await response.json();
+    console.log('📦 Réponse CJ:', JSON.stringify(data, null, 2));
+
     if (!data.result) throw new Error(`CJ createOrder: ${data.message}`);
 
     return {
@@ -292,11 +348,6 @@ async function handlePaymentSuccess(session: Stripe.Checkout.Session): Promise<v
 
   if (items.length > 0) {
     try {
-      const cjProducts = items.map((item) => ({
-        vid: item.cjVariantId || '',
-        quantity: item.quantity,
-      }));
-
       const cjResponse = await createCJOrder({
         orderId: order.id,
         shippingAddress: {
@@ -310,7 +361,7 @@ async function handlePaymentSuccess(session: Stripe.Checkout.Session): Promise<v
           email: order.customerEmail,
           phone: session.customer_details?.phone || undefined,
         },
-        products: cjProducts,
+        items: items,
       });
 
       if (cjResponse.simulated) {

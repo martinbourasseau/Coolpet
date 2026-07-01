@@ -9,13 +9,9 @@
 
 import { Order } from './orders.js';
 
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// 🔧 CONFIGURATION
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
-const FROM_EMAIL = 'commandes@coolpet.store';
-const SUPPORT_EMAIL = 'support@coolpet.store';
+const FROM_EMAIL = 'CoolPet <onboarding@resend.dev>';
+const SUPPORT_EMAIL = 'support@coolpet.vercel.app';
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 📧 EMAIL DE CONFIRMATION DE COMMANDE

@@ -5,6 +5,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { buffer } from 'micro';
 import Stripe from 'stripe';
+import { sendOrderConfirmationEmail } from '../_lib/email.js';
 
 export const config = {
   api: {
@@ -237,12 +238,6 @@ async function createCJOrder(params: {
       simulated: true,
     };
   }
-}
-
-async function sendOrderConfirmationEmail(order: Order): Promise<void> {
-  console.log(`📧 [EMAIL SIMULÉ] Confirmation pour ${order.customerEmail}`);
-  console.log(`   Commande: ${order.id}`);
-  console.log(`   Total: ${order.totalAmount}€`);
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
